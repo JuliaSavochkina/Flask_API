@@ -1,7 +1,30 @@
 from flask import jsonify, request, Response
 from BookModel import *
+from UserModel import User
 from settings import *
+import jwt
+import datetime
+from functools import wraps
 
+books = Book.get_all_books()
+
+DEFAULT_PAGE_LIMIT = 3
+
+app.config['SECRET_KEY'] = 'meow'
+
+
+@app.route('/login', methods=['POST'])
+def get_token():
+    request_data = request.get_json()
+    username = str(request_data['username'])
+    password = str(request_data['password'])
+    match = User.username_password_match(username, password)
+    if match:
+        expiration_date = datetime.datetime.utcnow() + datetime.timedelta(seconds=100)
+        token = jwt.encode({'exp': expiration_date}, app.config['SECRET_KEY'], algorithm='HS256')
+        return token
+    else:
+        return Response('', 401, mimetype='application/json')
 
 def validBookObject(bookObject):
     if 'name' in bookObject and 'price' in bookObject and 'isbn' in bookObject:
@@ -10,8 +33,21 @@ def validBookObject(bookObject):
         return False
 
 
-# GET /books
+def token_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        token = request.args.get('token')
+        try:
+            jwt.decode(token, app.config['SECRET_KEY'])
+            return f(*args, **kwargs)
+        except:
+            return jsonify({'error': 'Need a valid token'}), 401
+    return wrapper()
+
+
+# GET /books?token=
 @app.route('/books')
+@token_required
 def get_books():
     return jsonify({'books': Book.get_all_books()})
 
@@ -96,8 +132,8 @@ def delete_book(isbn):
         response = Response("", status=204)
         return response
     invalidBookObjectMSG = {
-            "error": "Book with the ISBN number that was provided was not found, so therefore unable to delete"
-        }
+        "error": "Book with the ISBN number that was provided was not found, so therefore unable to delete"
+    }
     response = Response(json.dumps(invalidBookObjectMSG), status=400, mimetype='application/json')
     return response
 
