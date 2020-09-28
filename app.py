@@ -42,7 +42,7 @@ def token_required(f):
             return f(*args, **kwargs)
         except:
             return jsonify({'error': 'Need a valid token'}), 401
-    return wrapper()
+    return wrapper
 
 
 # GET /books?token=
